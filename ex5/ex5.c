@@ -46,7 +46,6 @@ typedef struct
 } Scheduler;
 
 Scheduler scheduler; // Instância global do escalonador
-int running = 1;
 // Inicializa o escalonador
 void initScheduler(int buffer_size)
 {
@@ -111,7 +110,7 @@ void *dispatcher(void *arg)
     pthread_t workers[N];
 
     int i = 0;
-    while (running)
+    while (1)
     {
         pthread_mutex_lock(&scheduler.mutex);
         // Aguarda até que haja tarefas no buffer ou todas as threads estejam ocupadas
@@ -202,7 +201,6 @@ int main()
     }
 
     // Finaliza o programa
-    running = 0;
     pthread_cancel(dispatcher_thread);     // Iniciar o cancelamento da thread do dispatcher
     pthread_join(dispatcher_thread, NULL); // Aguardar o término da thread do dispatcher
     destroyScheduler();
