@@ -7,15 +7,22 @@
 #define RED "\e[31m"
 #define RESET "\e[0m"
 
-// Structure to store the game board and result
+/*
+    -  O jogo é executado na thread principal, após a criação das outras threads
+    - Foi utilizado o mutex para atribuir valor  variável result, pois ela é a zona crítica
+    onde poderia haver problema de concorrência
+*/
+
+// Estrutura para armazenar o tabuleiro do jogo e o resultado
 typedef struct
 {
     char board[SIZE][SIZE];
-    int result; // 0: no winner, 1: player 1 wins, 2: player 2 wins, 3: draw
+    int result; // 0: sem vencedor, 1: jogador 1 vence, 2: jogador 2 vence, 3: Velha
     pthread_mutex_t lock;
 } GameState;
 
-// Function to check rows and columns
+// Função para verificar linhas e colunas
+
 void *check_lines(void *arg)
 {
     GameState *state = (GameState *)arg;
@@ -24,10 +31,10 @@ void *check_lines(void *arg)
     {
         pthread_mutex_lock(&state->lock);
 
-        // Check rows
+        // Verifica as linhas
         for (int i = 0; i < SIZE; i++)
         {
-            if (state->board[i][0] != '_' && state->board[i][0] == state->board[i][1] && state->board[i][1] == state->board[i][2])
+            if (state->result == 0 && state->board[i][0] != '_' && state->board[i][0] == state->board[i][1] && state->board[i][1] == state->board[i][2])
             {
                 if (state->board[i][0] == 'X')
                     state->result = 1;
@@ -38,10 +45,10 @@ void *check_lines(void *arg)
             }
         }
 
-        // Check columns
+        // Verifica as colunas
         for (int i = 0; i < SIZE; i++)
         {
-            if (state->board[0][i] != '_' && state->board[0][i] == state->board[1][i] && state->board[1][i] == state->board[2][i])
+            if (state->result == 0 && state->board[0][i] != '_' && state->board[0][i] == state->board[1][i] && state->board[1][i] == state->board[2][i])
             {
                 if (state->board[0][i] == 'X')
                     state->result = 1;
@@ -61,7 +68,7 @@ void *check_lines(void *arg)
     pthread_exit(NULL);
 }
 
-// Function to check diagonals
+// Função para verificar as diagonais
 void *check_diagonals(void *arg)
 {
     GameState *state = (GameState *)arg;
@@ -70,8 +77,8 @@ void *check_diagonals(void *arg)
     {
         pthread_mutex_lock(&state->lock);
 
-        // Check first diagonal (top-left to bottom-right)
-        if (state->board[0][0] != '_' && state->board[0][0] == state->board[1][1] && state->board[1][1] == state->board[2][2])
+        // Verifica a primeira diagonal (canto superior esquerdo para canto inferior direito)
+        if (state->result == 0 && state->board[0][0] != '_' && state->board[0][0] == state->board[1][1] && state->board[1][1] == state->board[2][2])
         {
             if (state->board[0][0] == 'X')
                 state->result = 1;
@@ -81,7 +88,7 @@ void *check_diagonals(void *arg)
             pthread_exit(NULL);
         }
 
-        // Check second diagonal (top-right to bottom-left)
+        // Verifica a segunda diagonal (canto superior direito para canto inferior esquerdo)
         if (state->board[0][2] != '_' && state->board[0][2] == state->board[1][1] && state->board[1][1] == state->board[2][0])
         {
             if (state->board[0][2] == 'X')
@@ -101,7 +108,7 @@ void *check_diagonals(void *arg)
     pthread_exit(NULL);
 }
 
-// Function to check if the game is a draw
+// Função para verificar se o jogo terminou em empate
 void *check_draw(void *arg)
 {
     GameState *state = (GameState *)arg;
@@ -127,7 +134,7 @@ void *check_draw(void *arg)
 
         if (is_draw && state->result == 0)
         {
-            state->result = 3; // Draw
+            state->result = 3;
             pthread_mutex_unlock(&state->lock);
             pthread_exit(NULL);
         }
@@ -141,10 +148,10 @@ void *check_draw(void *arg)
     pthread_exit(NULL);
 }
 
-// Function to print the game board
+// Função para imprimir o tabuleiro do jogo
 void print_board(GameState *state)
 {
-    printf("\nBoard:\n ");
+    printf("\nTabuleiro:\n ");
     for (int j = 0; j < SIZE; j++)
         printf(" %d", j);
     printf("\n");
@@ -158,10 +165,10 @@ void print_board(GameState *state)
     }
 }
 
-// Function to play the game
+// Função para controlar o jogo
 void play_game(GameState *state)
 {
-    int turn = 0; // 0 for player 1 (X), 1 for player 2 (O)
+    int turn = 0; // 0 para jogador 1 (X), 1 para jogador 2 (O)
     int moves = 0;
 
     while (state->result == 0 && moves < SIZE * SIZE)
@@ -171,24 +178,27 @@ void play_game(GameState *state)
 
         print_board(state);
 
-        printf("\nPlayer %d (%c), enter your move (row and column): ", turn + 1, mark);
+        printf("\nJogador %d (%c), informe sua jogada (linha e coluna): ", turn + 1, mark);
         scanf("%d %d", &row, &col);
-
         if (row >= 0 && row < SIZE && col >= 0 && col < SIZE && state->board[row][col] == '_')
         {
+
+            pthread_mutex_lock(&state->lock);
             state->board[row][col] = mark;
+            pthread_mutex_unlock(&state->lock);
             moves++;
             turn = 1 - turn;
 
             print_board(state);
         }
         else
-            printf(RED "\nInvalid move. Try again.\n" RESET);
+            printf(RED "\nJogada inválida. Tente novamente.\n" RESET);
     }
 }
 
 int main()
 {
+    // Inicializa o estado do jogo
     GameState state = {
         .board = {
             {'_', '_', '_'},
@@ -200,25 +210,25 @@ int main()
 
     pthread_t threads[3];
 
-    // Create threads to check lines, diagonals, and draw
+    // Cria threads para verificar linhas, diagonais e empate
     pthread_create(&threads[0], NULL, check_lines, &state);
     pthread_create(&threads[1], NULL, check_diagonals, &state);
     pthread_create(&threads[2], NULL, check_draw, &state);
 
-    // Play the game
+    // Inicia o jogo
     play_game(&state);
 
-    // Wait for all threads to finish
+    // Aguarda todas as threads terminarem
     for (int i = 0; i < 3; i++)
         pthread_join(threads[i], NULL);
 
-    // Determine the final result
+    // Determina o resultado final
     if (state.result == 1)
-        printf("Player 1 wins!\n");
+        printf("Jogador 1 venceu!\n");
     else if (state.result == 2)
-        printf("Player 2 wins!\n");
+        printf("Jogador 2 venceu!\n");
     else if (state.result == 3)
-        printf("It's a draw!\n");
+        printf("Velha!\n");
 
     pthread_mutex_destroy(&state.lock);
     return 0;

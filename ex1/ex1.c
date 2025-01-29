@@ -5,6 +5,13 @@
 
 #define MAX_LINE_LENGTH 1024
 
+/*
+ - Nesse exercicio recebemos todos os arquivos como argumento do args, e para cada arquivo enviado
+ criamos uma thread para gerenciar ele
+ - Caso tenho algum problema com algum arquivo apenas a thread dele vai ser parada
+ - Após criar uma thread para cada arquivo, esperamos ela com join
+*/
+
 // Criação de struct para passar argumentos para a thread
 typedef struct
 {
@@ -69,6 +76,8 @@ int main(int argc, char *argv[])
         if (pthread_create(&threads[i], NULL, search_in_file, &thread_args[i]) != 0)
         {
             printf("Erro ao criar thread para o arquivo: %s\n", argv[i + 2]);
+            free(threads);
+            free(thread_args);
             return -1;
         }
     }
@@ -77,5 +86,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < num_files; i++)
         pthread_join(threads[i], NULL);
 
+    free(threads);
+    free(thread_args);
     return 0;
 }
