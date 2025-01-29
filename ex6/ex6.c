@@ -15,8 +15,11 @@ Nossa dupla utilizou Lamport's Bakery Algorithm para garantir a ordem justa entr
 em que um escritor recebe um ticket e espera até que seja a sua vez de escrever. Acreditamos
 que essa abordagem é mais justa para evitar starvation de escritores, garantindo que todos os
 escritores terão a chance de escrever, mesmo que haja muitos leitores ativos.
-Vimos a respeito deste algoritmo em algumas fontes antes de implementar, dentre elas,
-aqui: https://www.geeksforgeeks.org/bakery-algorithm-in-process-synchronization/
+Nossas Referências:
+- Vimos a respeito deste algoritmo em algumas fontes antes de implementar. Nos baseamos em
+mais de uma, mas especialmente, nas implementações do link abaixo:
+https://www.geeksforgeeks.org/bakery-algorithm-in-process-synchronization/
+- Link do artigo original: https://lamport.azurewebsites.net/pubs/bakery.pdf
 */
 
 // Mutexes e variáveis de condição
