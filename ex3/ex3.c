@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define NUM_VEICULOS_POR_DIRECAO 10 
-#define CAPACIDADE_PONTE 3     
+#define NUM_VEHICLES_PER_DIRECTION 10
+#define MAX_BRIDGE_CAPACITY 3     
 
 /*
 Nossa dupla escolheu utilizar um algoritmo de escalonamento baseado em prioridade dinâmica com alternância de direção.
@@ -16,102 +16,109 @@ A lib unistd foi utilizada para a função sleep e a lib stdlib para a função 
 typedef struct {
     pthread_mutex_t mutex;
     pthread_cond_t cond[2]; // cond[0] para direção 0, cond[1] para direção 1
-    int carrosNaPonte;      // Número atual de carros na ponte
-    int direcaoAtual;       // Direção atual da ponte (0 ou 1)
-    int esperando[2];       // Carros esperando em cada direção
-} ponte_t;
+    int carsOnBridge;       // Número atual de carros na ponte
+    int currentDirection;   // Direção atual da ponte (0 ou 1)
+    int waiting[2];         // Carros esperando em cada direção
+} bridge_t;
 
-void atravessarPonte(int id, int direcao) {
-    printf("Veículo %d (direção %d) está atravessando a ponte...\n", id, direcao);
+/* Struct para passar argumentos para as threads. O uso da struct é necessário
+para evitar que os argumentos sejam liberados antes da thread terminar. */
+typedef struct {
+    bridge_t *bridge;
+    int id;
+    int direction;
+} vehicle_args_t;
+
+void crossBridge(int id, int direction) {
+    printf("Veículo %d (direção %d) está atravessando a ponte...\n", id, direction);
     sleep(rand() % 3 + 1); // Usamos um sleep aleatório para simular o tempo de travessia
 }
 
-void *veiculo(void *arg) {
-    ponte_t *ponte = (ponte_t *)((void **)arg)[0];
-    int id = *((int *)((void **)arg)[1]);
-    int direcao = *((int *)((void **)arg)[2]);
+void *vehicle(void *arg) {
+    vehicle_args_t *args = (vehicle_args_t *)arg;
+    bridge_t *bridge = args->bridge;
+    int id = args->id;
+    int direction = args->direction;
 
-    pthread_mutex_lock(&ponte->mutex);
+    pthread_mutex_lock(&bridge->mutex);
 
     // Marca que este veículo está esperando
-    ponte->esperando[direcao]++;
+    bridge->waiting[direction]++;
 
     // Aguarda condições para acessar a ponte:
-    while (ponte->carrosNaPonte == CAPACIDADE_PONTE || 
-           (ponte->carrosNaPonte > 0 && ponte->direcaoAtual != direcao)) {
-        pthread_cond_wait(&ponte->cond[direcao], &ponte->mutex);
+    while (bridge->carsOnBridge == MAX_BRIDGE_CAPACITY ||
+           (bridge->carsOnBridge > 0 && bridge->currentDirection != direction)) {
+        pthread_cond_wait(&bridge->cond[direction], &bridge->mutex);
     }
 
     // Entra na ponte
-    ponte->esperando[direcao]--;
-    ponte->carrosNaPonte++;
-    ponte->direcaoAtual = direcao;
-    printf("Veículo %d (direção %d) entrou na ponte. Carros na ponte: %d\n", id, direcao, ponte->carrosNaPonte);
-    pthread_mutex_unlock(&ponte->mutex);
+    bridge->waiting[direction]--;
+    bridge->carsOnBridge++;
+    bridge->currentDirection = direction;
+    printf("Veículo %d (direção %d) entrou na ponte. Carros na ponte: %d\n", id, direction, bridge->carsOnBridge);
+    pthread_mutex_unlock(&bridge->mutex);
 
     // Atravessa a ponte
-    atravessarPonte(id, direcao);
-    pthread_mutex_lock(&ponte->mutex);
+    crossBridge(id, direction);
+
+    pthread_mutex_lock(&bridge->mutex);
 
     // Sai da ponte
-    ponte->carrosNaPonte--;
-    printf("Veículo %d (direção %d) saiu da ponte. Carros na ponte: %d\n", id, direcao, ponte->carrosNaPonte);
+    bridge->carsOnBridge--;
+    printf("Veículo %d (direção %d) saiu da ponte. Carros na ponte: %d\n", id, direction, bridge->carsOnBridge);
 
     // Se não há mais carros na ponte, sinaliza a direção oposta (fairness)
-    if (ponte->carrosNaPonte == 0) {
-        int outraDirecao = 1 - direcao; // Direção oposta
-        if (ponte->esperando[outraDirecao] > 0) {
-            pthread_cond_broadcast(&ponte->cond[outraDirecao]);
-        } else if (ponte->esperando[direcao] > 0) {
-            pthread_cond_broadcast(&ponte->cond[direcao]);
+    if (bridge->carsOnBridge == 0) {
+        int otherDirection = 1 - direction;
+        if (bridge->waiting[otherDirection] > 0) {
+            pthread_cond_broadcast(&bridge->cond[otherDirection]);
+        } else if (bridge->waiting[direction] > 0) {
+            pthread_cond_broadcast(&bridge->cond[direction]);
         }
     }
 
-    pthread_mutex_unlock(&ponte->mutex);
+    pthread_mutex_unlock(&bridge->mutex);
 
+    free(args); 
     return NULL;
 }
 
 int main() {
-
     srand(time(NULL));
 
     // Inicializa a ponte
-    ponte_t ponte;
-    pthread_mutex_init(&ponte.mutex, NULL);
-    pthread_cond_init(&ponte.cond[0], NULL);
-    pthread_cond_init(&ponte.cond[1], NULL);
-    ponte.carrosNaPonte = 0;
-    ponte.direcaoAtual = -1; // Nenhuma direção, inicialmente
-    ponte.esperando[0] = ponte.esperando[1] = 0;
+    bridge_t bridge;
+    pthread_mutex_init(&bridge.mutex, NULL);
+    pthread_cond_init(&bridge.cond[0], NULL);
+    pthread_cond_init(&bridge.cond[1], NULL);
+    bridge.carsOnBridge = 0;
+    bridge.currentDirection = -1;
+    bridge.waiting[0] = bridge.waiting[1] = 0;
 
     // Cria threads para os veículos
-    pthread_t threads[NUM_VEICULOS_POR_DIRECAO * 2];
-    void *args[NUM_VEICULOS_POR_DIRECAO * 2][3];
-    for (int i = 0; i < NUM_VEICULOS_POR_DIRECAO * 2; i++) {
-        int *id = malloc(sizeof(int));
-        int *direcao = malloc(sizeof(int));
-        *id = i;
-        *direcao = i < NUM_VEICULOS_POR_DIRECAO ? 0 : 1; // Primeiros N veículos na direção 0, depois na direção 1
+    pthread_t threads[NUM_VEHICLES_PER_DIRECTION * 2];
+    
+    for (int i = 0; i < NUM_VEHICLES_PER_DIRECTION * 2; i++) {
+        vehicle_args_t *args = malloc(sizeof(vehicle_args_t)); 
+        args->id = i;
+        args->direction = (i < NUM_VEHICLES_PER_DIRECTION) ? 0 : 1;
 
-        args[i][0] = &ponte;
-        args[i][1] = id;
-        args[i][2] = direcao;
+        if (pthread_create(&threads[i], NULL, vehicle, args) != 0) {
+            fprintf(stderr, "Erro ao criar thread para veículo %d\n", i);
+            free(args); 
+        }
 
-        pthread_create(&threads[i], NULL, veiculo, args[i]);
         usleep(100000); // Simula intervalo de chegada dos veículos
     }
 
     // Aguarda todas as threads terminarem
-    for (int i = 0; i < NUM_VEICULOS_POR_DIRECAO * 2; i++) {
+    for (int i = 0; i < NUM_VEHICLES_PER_DIRECTION * 2; i++) {
         pthread_join(threads[i], NULL);
-        free(args[i][1]); 
-        free(args[i][2]); 
     }
 
-    pthread_mutex_destroy(&ponte.mutex);
-    pthread_cond_destroy(&ponte.cond[0]);
-    pthread_cond_destroy(&ponte.cond[1]);
+    pthread_mutex_destroy(&bridge.mutex);
+    pthread_cond_destroy(&bridge.cond[0]);
+    pthread_cond_destroy(&bridge.cond[1]);
 
     return 0;
 }
