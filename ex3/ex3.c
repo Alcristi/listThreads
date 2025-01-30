@@ -92,7 +92,7 @@ int main() {
     pthread_cond_init(&bridge.cond[0], NULL);
     pthread_cond_init(&bridge.cond[1], NULL);
     bridge.carsOnBridge = 0;
-    bridge.currentDirection = -1;
+    bridge.currentDirection = -1; // Nenhuma direção, inicialmente
     bridge.waiting[0] = bridge.waiting[1] = 0;
 
     // Cria threads para os veículos
@@ -100,6 +100,7 @@ int main() {
     
     for (int i = 0; i < NUM_VEHICLES_PER_DIRECTION * 2; i++) {
         vehicle_args_t *args = malloc(sizeof(vehicle_args_t)); 
+        args->bridge = &bridge;
         args->id = i;
         args->direction = (i < NUM_VEHICLES_PER_DIRECTION) ? 0 : 1;
 
