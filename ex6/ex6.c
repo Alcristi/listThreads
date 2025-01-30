@@ -25,9 +25,10 @@ https://www.geeksforgeeks.org/bakery-algorithm-in-process-synchronization/
 // Mutexes e variáveis de condição
 pthread_mutex_t read_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t write_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t read_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t write_cond = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t ticket_cond = PTHREAD_COND_INITIALIZER;
 int reader_count = 0;
 int writer_waiting = 0;
 
@@ -83,9 +84,7 @@ void *writer(void *arg) {
         // Espera até ser a vez deste escritor
         pthread_mutex_lock(&ticket_mutex);
         while (current_ticket != my_ticket) {
-            pthread_mutex_unlock(&ticket_mutex);
-            sched_yield(); // Libera a CPU para outros threads
-            pthread_mutex_lock(&ticket_mutex);
+            pthread_cond_wait(&ticket_cond, &ticket_mutex);
         }
         pthread_mutex_unlock(&ticket_mutex);
 
@@ -115,6 +114,7 @@ void *writer(void *arg) {
         // Avança para o próximo ticket
         pthread_mutex_lock(&ticket_mutex);
         current_ticket++;
+        pthread_cond_broadcast(&ticket_cond);
         pthread_mutex_unlock(&ticket_mutex);
 
         pthread_mutex_lock(&read_mutex);
