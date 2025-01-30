@@ -21,7 +21,8 @@ typedef struct {
     int waiting[2];         // Carros esperando em cada direção
 } bridge_t;
 
-// Struct para passar argumentos para as threads
+/* Struct para passar argumentos para as threads. O uso da struct é necessário
+para evitar que os argumentos sejam liberados antes da thread terminar. */
 typedef struct {
     bridge_t *bridge;
     int id;
@@ -78,7 +79,7 @@ void *vehicle(void *arg) {
 
     pthread_mutex_unlock(&bridge->mutex);
 
-    free(args); // Libera a memória da struct alocada dinamicamente
+    free(args); 
     return NULL;
 }
 
@@ -98,14 +99,13 @@ int main() {
     pthread_t threads[NUM_VEHICLES_PER_DIRECTION * 2];
     
     for (int i = 0; i < NUM_VEHICLES_PER_DIRECTION * 2; i++) {
-        vehicle_args_t *args = malloc(sizeof(vehicle_args_t)); // Aloca memória para os argumentos da thread
-        args->bridge = &bridge;
+        vehicle_args_t *args = malloc(sizeof(vehicle_args_t)); 
         args->id = i;
         args->direction = (i < NUM_VEHICLES_PER_DIRECTION) ? 0 : 1;
 
         if (pthread_create(&threads[i], NULL, vehicle, args) != 0) {
             fprintf(stderr, "Erro ao criar thread para veículo %d\n", i);
-            free(args); // Libera a memória caso a thread não seja criada corretamente
+            free(args); 
         }
 
         usleep(100000); // Simula intervalo de chegada dos veículos
