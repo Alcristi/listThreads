@@ -87,7 +87,10 @@ int takeBlockingQueue(BlockingQueue* Q) {
     return value;
 }
 
-// Função para liberar a memória alocada pela fila bloqueante
+/*Função para liberar a memória alocada pela fila bloqueante.
+Apesar de neste caso termos um loop infinito, a função foi implementada para garantir
+a liberação de memória em casos de uso mais genéricos.
+*/
 void freeBlockingQueue(BlockingQueue *Q) {
     pthread_mutex_lock(&Q->mutex);
     while (Q->head) {
