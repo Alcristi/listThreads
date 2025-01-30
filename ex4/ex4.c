@@ -87,6 +87,22 @@ int takeBlockingQueue(BlockingQueue* Q) {
     return value;
 }
 
+// Função para liberar a memória alocada pela fila bloqueante
+void freeBlockingQueue(BlockingQueue *Q) {
+    pthread_mutex_lock(&Q->mutex);
+    while (Q->head) {
+        Elem *temp = Q->head;
+        Q->head = Q->head->prox;
+        free(temp);
+    }
+    pthread_mutex_unlock(&Q->mutex);
+
+    pthread_mutex_destroy(&Q->mutex);
+    pthread_cond_destroy(&Q->notFull);
+    pthread_cond_destroy(&Q->notEmpty);
+    free(Q);
+}
+
 // Função para os produtores
 void* producer(void* arg) {
     BlockingQueue* Q = (BlockingQueue*) arg;
@@ -134,6 +150,6 @@ int main() {
         pthread_join(consumers[i], NULL);
     }
 
-    free(Q);
+    freeBlockingQueue(Q);
     return 0;
 }
